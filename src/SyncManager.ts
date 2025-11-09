@@ -1,4 +1,4 @@
-import * as Automerge from '@automerge/automerge';
+import Automerge from '@automerge/automerge';
 import { LocalAdapter, RemoteAdapter, CRDTDocument } from './types';
 
 /**
