@@ -1,133 +1,153 @@
+
 import Automerge from '@automerge/automerge';
-import { LocalAdapter, RemoteAdapter, CRDTDocument } from './types';
+import { LocalAdapter, RemoteAdapter, SyncMessage, LocalDocument } from './types';
 
 /**
- * The SyncManager class is responsible for synchronizing data between a local and remote adapter.
+ * Manages the synchronization of Automerge documents between a local and remote adapter.
+ * Synchronization is performed on a per-document basis using Automerge's sync protocol.
  */
 export class SyncManager<T> {
-  private localAdapter: LocalAdapter<T>;
-  private remoteAdapter: RemoteAdapter<T>;
-  private collectionName: string;
+  private localAdapter: LocalAdapter;
+  private remoteAdapter: RemoteAdapter;
+  private documents: Map<string, Automerge.Doc<T>> = new Map();
+  private syncStates: Map<string, Automerge.SyncState> = new Map();
   private isOnline: boolean = navigator.onLine;
-  private localChangesQueue: CRDTDocument<T>[] = [];
-  private remoteChangesQueue: CRDTDocument<T>[] = [];
-  private syncState: Automerge.SyncState;
 
-  constructor(
-    localAdapter: LocalAdapter<T>,
-    remoteAdapter: RemoteAdapter<T>,
-    collectionName: string
-  ) {
+  constructor(localAdapter: LocalAdapter, remoteAdapter: RemoteAdapter) {
     this.localAdapter = localAdapter;
     this.remoteAdapter = remoteAdapter;
-    this.collectionName = collectionName;
-    this.syncState = Automerge.initSyncState();
+
     window.addEventListener('online', () => (this.isOnline = true));
     window.addEventListener('offline', () => (this.isOnline = false));
   }
 
   /**
-   * Initializes the SyncManager, loads initial data, and detects divergence.
+   * Initializes the SyncManager by loading local and remote documents
+   * and starting the synchronization process.
    */
   async bootstrap(): Promise<void> {
-    if (!this.isOnline) {
-      console.log('Offline. Skipping bootstrap.');
-      return;
+    const localDocs = await this.localAdapter.getAll();
+    for (const doc of localDocs) {
+      this.documents.set(doc.id, Automerge.load<T>(doc.binary));
+      this.syncStates.set(doc.id, Automerge.initSyncState());
     }
 
-    const localDocs = await this.localAdapter.getAll();
-    const remoteDocs = await this.remoteAdapter.getSnapshot(this.collectionName);
+    if (this.isOnline) {
+      const remoteDocs = await this.remoteAdapter.getSnapshot();
+      for (const doc of remoteDocs) {
+        const localDoc = this.documents.get(doc.id);
+        if (localDoc) {
+          // Document exists locally, merge remote changes
+          const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(doc.binary));
+          this.documents.set(doc.id, mergedDoc);
+        } else {
+          // Document only exists remotely, load it
+          this.documents.set(doc.id, Automerge.load<T>(doc.binary));
+          this.syncStates.set(doc.id, Automerge.initSyncState());
+        }
+      }
+    }
 
-    // Pseudocode for divergence detection and initial sync
-    // 1. Compare local and remote docs
-    // 2. If local changes exist, push them
-    // 3. If remote changes exist, pull them
-    // 4. Update checkpoint
+    // Start listening for remote changes
+    this.watchRemote();
+
+    // Initial sync of all documents
+    this.synchronizeAll();
   }
 
   /**
-   * Watches for remote changes and merges them into the local database.
+   * Subscribes to incoming sync messages from the remote adapter.
    */
   watchRemote(): () => void {
-    return this.remoteAdapter.watch(this.collectionName, (remoteDocs) => {
-      this.remoteChangesQueue.push(...remoteDocs);
-      this.processRemoteChanges();
-    });
+    return this.remoteAdapter.watch(this.handleIncomingMessage.bind(this));
   }
 
   /**
-   * Enqueues a local change to be pushed to the remote adapter.
-   * @param doc The document to be enqueued.
+   * Handles an incoming sync message from the remote adapter.
+   * @param message The incoming sync message.
    */
-  enqueue(doc: CRDTDocument<T>): void {
-    this.localChangesQueue.push(doc);
-    this.processLocalChanges();
-  }
+  private async handleIncomingMessage(message: SyncMessage): Promise<void> {
+    const { docId, message: syncMessage } = message;
+    let doc = this.documents.get(docId);
+    let syncState = this.syncStates.get(docId);
 
-  /**
-   * Pushes local changes to the remote adapter.
-   */
-  private async push(): Promise<void> {
-    if (!this.isOnline || this.localChangesQueue.length === 0) {
+    if (!doc || !syncState) {
+      console.warn(`Received message for unknown document: ${docId}`);
       return;
     }
 
-    // Pseudocode for pushing local changes
-    // 1. Send queued local changes to remote in a batch
-    // 2. Update checkpoint
+    const [newDoc, newSyncState, patch] = Automerge.receiveSyncMessage(doc, syncState, syncMessage);
+    this.documents.set(docId, newDoc);
+    this.syncStates.set(docId, newSyncState);
+
+    // Persist the updated document locally
+    await this.localAdapter.put(docId, Automerge.save(newDoc));
+
+    // If there are changes to send back, generate a response message
+    const [responseSyncState, responseMessage] = Automerge.generateSyncMessage(newDoc, newSyncState);
+    if (responseMessage) {
+      this.syncStates.set(docId, responseSyncState);
+      await this.remoteAdapter.send({ docId, message: responseMessage });
+    }
   }
 
   /**
-   * Pulls remote changes and merges them into the local database.
+   * Applies a local change to a document and triggers synchronization.
+   * @param docId The ID of the document to change.
+   * @param changeFn The function that applies the change.
    */
-  private async pull(): Promise<void> {
-    if (this.remoteChangesQueue.length === 0) {
+  async updateDocument(docId: string, changeFn: (doc: T) => void): Promise<void> {
+    let doc = this.documents.get(docId);
+    if (!doc) {
+      throw new Error(`Document not found: ${docId}`);
+    }
+
+    const newDoc = Automerge.change(doc, changeFn);
+    this.documents.set(docId, newDoc);
+    await this.localAdapter.put(docId, Automerge.save(newDoc));
+
+    this.synchronize(docId);
+  }
+
+  /**
+   * Synchronizes a specific document with the remote peer.
+   * @param docId The ID of the document to synchronize.
+   */
+  private async synchronize(docId: string): Promise<void> {
+    if (!this.isOnline) {
       return;
     }
 
-    // Pseudocode for pulling remote changes
-    // 1. Fetch remote changes
-    // 2. Merge with local using Automerge.merge()
-    // 3. Update local checkpoint
+    const doc = this.documents.get(docId);
+    const syncState = this.syncStates.get(docId);
+
+    if (!doc || !syncState) {
+      return;
+    }
+
+    const [newSyncState, message] = Automerge.generateSyncMessage(doc, syncState);
+    this.syncStates.set(docId, newSyncState);
+
+    if (message) {
+      await this.remoteAdapter.send({ docId, message });
+    }
   }
 
   /**
-   * Processes the queue of local changes.
+   * Synchronizes all documents with the remote peer.
    */
-  private async processLocalChanges(): Promise<void> {
-    await this.push();
+  private synchronizeAll(): void {
+    for (const docId of this.documents.keys()) {
+      this.synchronize(docId);
+    }
   }
 
   /**
-   * Processes the queue of remote changes.
+   * Returns a document by its ID.
+   * @param docId The ID of the document to retrieve.
+   * @returns The Automerge document, or undefined if not found.
    */
-  private async processRemoteChanges(): Promise<void> {
-    await this.pull();
-  }
-
-  /**
-   * Merges a remote document with a local document.
-   * @param localDoc The local document.
-   * @param remoteDoc The remote document.
-   * @returns The merged document.
-   */
-  private merge(localDoc: Automerge.Doc<T>, remoteDoc: Automerge.Doc<T>): Automerge.Doc<T> {
-    return Automerge.merge(localDoc, remoteDoc);
-  }
-
-  /**
-   * Checks if there are local changes to be pushed.
-   * @returns True if there are local changes, false otherwise.
-   */
-  hasLocalChange(): boolean {
-    return this.localChangesQueue.length > 0;
-  }
-
-  /**
-   * Checks if there are remote changes to be pulled.
-   * @returns True if there are remote changes, false otherwise.
-   */
-  hasRemoteChange(): boolean {
-    return this.remoteChangesQueue.length > 0;
+  getDocument(docId: string): Automerge.Doc<T> | undefined {
+    return this.documents.get(docId);
   }
 }
