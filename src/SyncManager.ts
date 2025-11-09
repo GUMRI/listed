@@ -11,6 +11,7 @@ export class SyncManager<T> {
   private remoteAdapter: RemoteAdapter;
   private documents: Map<string, Automerge.Doc<T>> = new Map();
   private syncStates: Map<string, Automerge.SyncState> = new Map();
+  private subscribers: Map<string, ((doc: Automerge.Doc<T>) => void)[]> = new Map();
   private isOnline: boolean = navigator.onLine;
 
   constructor(localAdapter: LocalAdapter, remoteAdapter: RemoteAdapter) {
@@ -85,6 +86,7 @@ export class SyncManager<T> {
     const [newDoc, newSyncState, patch] = Automerge.receiveSyncMessage(doc, syncState, syncMessage);
     this.documents.set(docId, newDoc);
     this.syncStates.set(docId, newSyncState);
+    this.notifySubscribers(docId);
 
     // Persist the updated document locally
     await this.localAdapter.put(docId, Automerge.save(newDoc));
@@ -110,6 +112,7 @@ export class SyncManager<T> {
 
     const newDoc = Automerge.change(doc, changeFn);
     this.documents.set(docId, newDoc);
+    this.notifySubscribers(docId);
     await this.localAdapter.put(docId, Automerge.save(newDoc));
 
     this.synchronize(docId);
@@ -155,5 +158,42 @@ export class SyncManager<T> {
    */
   getDocument(docId: string): Automerge.Doc<T> | undefined {
     return this.documents.get(docId);
+  }
+
+  /**
+   * Subscribes to changes for a specific document.
+   * @param docId The ID of the document to subscribe to.
+   * @param callback The callback to invoke when the document changes.
+   * @returns An unsubscribe function.
+   */
+  subscribe(docId: string, callback: (doc: Automerge.Doc<T>) => void): () => void {
+    if (!this.subscribers.has(docId)) {
+      this.subscribers.set(docId, []);
+    }
+    this.subscribers.get(docId)!.push(callback);
+
+    return () => {
+      const subs = this.subscribers.get(docId);
+      if (subs) {
+        const index = subs.indexOf(callback);
+        if (index > -1) {
+          subs.splice(index, 1);
+        }
+      }
+    };
+  }
+
+  /**
+   * Notifies all subscribers of a document change.
+   * @param docId The ID of the document that changed.
+   */
+  private notifySubscribers(docId: string): void {
+    const doc = this.documents.get(docId);
+    if (doc) {
+      const subs = this.subscribers.get(docId);
+      if (subs) {
+        subs.forEach((callback) => callback(doc));
+      }
+    }
   }
 }
