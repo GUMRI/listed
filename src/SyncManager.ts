@@ -17,7 +17,10 @@ export class SyncManager<T> {
     this.localAdapter = localAdapter;
     this.remoteAdapter = remoteAdapter;
 
-    window.addEventListener('online', () => (this.isOnline = true));
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      this.synchronizeAll();
+    });
     window.addEventListener('offline', () => (this.isOnline = false));
   }
 
@@ -40,6 +43,7 @@ export class SyncManager<T> {
           // Document exists locally, merge remote changes
           const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(doc.binary));
           this.documents.set(doc.id, mergedDoc);
+          this.localAdapter.put(doc.id, Automerge.save(mergedDoc));
         } else {
           // Document only exists remotely, load it
           this.documents.set(doc.id, Automerge.load<T>(doc.binary));
@@ -71,9 +75,11 @@ export class SyncManager<T> {
     let doc = this.documents.get(docId);
     let syncState = this.syncStates.get(docId);
 
-    if (!doc || !syncState) {
-      console.warn(`Received message for unknown document: ${docId}`);
-      return;
+    if (!doc) {
+      doc = Automerge.init<T>();
+    }
+    if (!syncState) {
+      syncState = Automerge.initSyncState();
     }
 
     const [newDoc, newSyncState, patch] = Automerge.receiveSyncMessage(doc, syncState, syncMessage);
