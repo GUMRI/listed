@@ -37,11 +37,7 @@ syncManager.bootstrap().then(() => {
   let doc = syncManager.getDocument(docId);
   if (!doc) {
     // Create the document if it doesn't exist
-    const newDoc = Automerge.from({ text: '' });
-    localAdapter.put(docId, Automerge.save(newDoc));
-    syncManager.updateDocument(docId, (d) => {
-      d.text = '';
-    });
+    syncManager.createDocument(docId, { text: '' });
   }
 });
 

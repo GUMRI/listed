@@ -104,6 +104,30 @@ export class SyncManager<T> {
    * @param docId The ID of the document to change.
    * @param changeFn The function that applies the change.
    */
+  /**
+   * Creates a new document, saves it locally, and registers it for synchronization.
+   * @param docId The ID of the new document.
+   * @param initialDoc The initial state of the document.
+   */
+  async createDocument(docId: string, initialDoc: T): Promise<void> {
+    if (this.documents.has(docId)) {
+      throw new Error(`Document already exists: ${docId}`);
+    }
+
+    const newDoc = Automerge.from(initialDoc);
+    this.documents.set(docId, newDoc);
+    this.syncStates.set(docId, Automerge.initSyncState());
+    this.notifySubscribers(docId);
+    await this.localAdapter.put(docId, Automerge.save(newDoc));
+
+    this.synchronize(docId);
+  }
+
+  /**
+   * Applies a local change to a document and triggers synchronization.
+   * @param docId The ID of the document to change.
+   * @param changeFn The function that applies the change.
+   */
   async updateDocument(docId: string, changeFn: (doc: T) => void): Promise<void> {
     let doc = this.documents.get(docId);
     if (!doc) {
