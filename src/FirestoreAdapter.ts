@@ -1,7 +1,5 @@
 
-import { FirebaseApp, initializeApp } from 'firebase/app';
 import {
-  getFirestore,
   collection,
   onSnapshot,
   doc,
@@ -18,9 +16,8 @@ export class FirestoreAdapter implements RemoteAdapter {
   private firestore: Firestore;
   private collectionName: string;
 
-  constructor(firebaseConfig: object, collectionName: string) {
-    const app = initializeApp(firebaseConfig);
-    this.firestore = getFirestore(app);
+  constructor(firestore: Firestore, collectionName: string) {
+    this.firestore = firestore;
     this.collectionName = collectionName;
   }
 

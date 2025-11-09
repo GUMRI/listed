@@ -3,6 +3,8 @@ import './style.css';
 import Automerge from '@automerge/automerge';
 import { SyncManager, FirestoreAdapter, InMemoryAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 
 interface TextDoc {
   text: string;
@@ -13,9 +15,13 @@ const state = document.getElementById('state') as HTMLPreElement;
 
 const docId = 'collaborative-text-doc';
 
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const firestore = getFirestore(app);
+
 // Initialize adapters
 const localAdapter = new InMemoryAdapter();
-const remoteAdapter = new FirestoreAdapter(firebaseConfig, 'documents');
+const remoteAdapter = new FirestoreAdapter(firestore, 'documents');
 
 // Initialize SyncManager
 const syncManager = new SyncManager<TextDoc>(localAdapter, remoteAdapter);
