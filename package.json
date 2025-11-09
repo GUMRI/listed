@@ -1,0 +1,15 @@
+{
+  "name": "listedb-sync-manager",
+  "version": "1.0.0",
+  "description": "SyncManager for listedb library",
+  "main": "dist/SyncManager.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4"
+  },
+  "dependencies": {
+    "@automerge/automerge": "^2.0.1"
+  }
+}
