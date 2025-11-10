@@ -7,7 +7,7 @@ import {
   getDocs,
   Firestore,
 } from 'firebase/firestore';
-import { RemoteAdapter, SyncMessage, LocalDocument } from './types';
+import { RemoteAdapter, LocalDocument } from './types';
 
 /**
  * An implementation of the RemoteAdapter interface for Firestore.
@@ -21,27 +21,27 @@ export class FirestoreAdapter implements RemoteAdapter {
     this.collectionName = collectionName;
   }
 
-  watch(callback: (message: SyncMessage) => void): () => void {
+  watch(callback: (doc: LocalDocument) => void): () => void {
     const q = collection(this.firestore, this.collectionName);
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added' || change.type === 'modified') {
           const data = change.doc.data();
-          const message: SyncMessage = {
-            docId: change.doc.id,
-            message: new Uint8Array(data.message),
+          const doc: LocalDocument = {
+            id: change.doc.id,
+            binary: new Uint8Array(data.binary),
           };
-          callback(message);
+          callback(doc);
         }
       });
     });
     return unsubscribe;
   }
 
-  async send(message: SyncMessage): Promise<void> {
-    const { docId, message: syncMessage } = message;
-    const docRef = doc(this.firestore, this.collectionName, docId);
-    await setDoc(docRef, { message: Array.from(syncMessage) });
+  async send(doc: LocalDocument): Promise<void> {
+    const { id, binary } = doc;
+    const docRef = doc(this.firestore, this.collectionName, id);
+    await setDoc(docRef, { binary: Array.from(binary) });
   }
 
   async getSnapshot(): Promise<LocalDocument[]> {
@@ -49,7 +49,7 @@ export class FirestoreAdapter implements RemoteAdapter {
     const snapshot = await getDocs(q);
     return snapshot.docs.map((doc) => ({
       id: doc.id,
-      binary: new Uint8Array(doc.data().message),
+      binary: new Uint8Array(doc.data().binary),
     }));
   }
 }

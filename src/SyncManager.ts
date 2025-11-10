@@ -1,16 +1,14 @@
 
 import * as Automerge from '@automerge/automerge';
-import { LocalAdapter, RemoteAdapter, SyncMessage, LocalDocument } from './types';
+import { LocalAdapter, RemoteAdapter, LocalDocument } from './types';
 
 /**
  * Manages the synchronization of Automerge documents between a local and remote adapter.
- * Synchronization is performed on a per-document basis using Automerge's sync protocol.
  */
 export class SyncManager<T> {
   private localAdapter: LocalAdapter;
   private remoteAdapter: RemoteAdapter;
   private documents: Map<string, Automerge.Doc<T>> = new Map();
-  private syncStates: Map<string, Automerge.SyncState> = new Map();
   private subscribers: Map<string, ((doc: Automerge.Doc<T>) => void)[]> = new Map();
   private isOnline: boolean = navigator.onLine;
 
@@ -33,7 +31,6 @@ export class SyncManager<T> {
     const localDocs = await this.localAdapter.getAll();
     for (const doc of localDocs) {
       this.documents.set(doc.id, Automerge.load<T>(doc.binary));
-      this.syncStates.set(doc.id, Automerge.initSyncState());
       this.notifySubscribers(doc.id);
     }
 
@@ -42,73 +39,48 @@ export class SyncManager<T> {
       for (const doc of remoteDocs) {
         const localDoc = this.documents.get(doc.id);
         if (localDoc) {
-          // Document exists locally, merge remote changes
           const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(doc.binary));
           this.documents.set(doc.id, mergedDoc);
           this.localAdapter.put(doc.id, Automerge.save(mergedDoc));
           this.notifySubscribers(doc.id);
         } else {
-          // Document only exists remotely, load it
           this.documents.set(doc.id, Automerge.load<T>(doc.binary));
-          this.syncStates.set(doc.id, Automerge.initSyncState());
           this.notifySubscribers(doc.id);
         }
       }
     }
 
-    // Start listening for remote changes
     this.watchRemote();
-
-    // Initial sync of all documents
-    this.synchronizeAll();
   }
 
   /**
-   * Subscribes to incoming sync messages from the remote adapter.
+   * Subscribes to incoming document changes from the remote adapter.
    */
   watchRemote(): () => void {
-    return this.remoteAdapter.watch(this.handleIncomingMessage.bind(this));
+    return this.remoteAdapter.watch(this.handleIncomingDocument.bind(this));
   }
 
   /**
-   * Handles an incoming sync message from the remote adapter.
-   * @param message The incoming sync message.
+   * Handles an incoming document from the remote adapter.
+   * @param remoteDoc The incoming document.
    */
-  private async handleIncomingMessage(message: SyncMessage): Promise<void> {
-    const { docId, message: syncMessage } = message;
-    let doc = this.documents.get(docId);
-    let syncState = this.syncStates.get(docId);
+  private async handleIncomingDocument(remoteDoc: LocalDocument): Promise<void> {
+    const { id, binary } = remoteDoc;
+    const localDoc = this.documents.get(id);
 
-    if (!doc) {
-      doc = Automerge.init<T>();
+    if (localDoc) {
+      const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(binary));
+      this.documents.set(id, mergedDoc);
+    } else {
+      this.documents.set(id, Automerge.load<T>(binary));
     }
-    if (!syncState) {
-      syncState = Automerge.initSyncState();
-    }
 
-    const [newDoc, newSyncState, patch] = Automerge.receiveSyncMessage(doc, syncState, syncMessage);
-    this.documents.set(docId, newDoc);
-    this.syncStates.set(docId, newSyncState);
-    this.notifySubscribers(docId);
-
-    // Persist the updated document locally
-    await this.localAdapter.put(docId, Automerge.save(newDoc));
-
-    // If there are changes to send back, generate a response message
-    const [responseSyncState, responseMessage] = Automerge.generateSyncMessage(newDoc, newSyncState);
-    if (responseMessage) {
-      this.syncStates.set(docId, responseSyncState);
-      await this.remoteAdapter.send({ docId, message: responseMessage });
-    }
+    await this.localAdapter.put(id, Automerge.save(this.documents.get(id)!));
+    this.notifySubscribers(id);
   }
 
   /**
-   * Applies a local change to a document and triggers synchronization.
-   * @param docId The ID of the document to change.
-   * @param changeFn The function that applies the change.
-   */
-  /**
-   * Creates a new document, saves it locally, and registers it for synchronization.
+   * Creates a new document, saves it locally, and sends it to the remote.
    * @param docId The ID of the new document.
    * @param initialDoc The initial state of the document.
    */
@@ -119,20 +91,22 @@ export class SyncManager<T> {
 
     const newDoc = Automerge.from(initialDoc);
     this.documents.set(docId, newDoc);
-    this.syncStates.set(docId, Automerge.initSyncState());
     this.notifySubscribers(docId);
-    await this.localAdapter.put(docId, Automerge.save(newDoc));
+    const binary = Automerge.save(newDoc);
+    await this.localAdapter.put(docId, binary);
 
-    this.synchronize(docId);
+    if (this.isOnline) {
+      await this.remoteAdapter.send({ id: docId, binary });
+    }
   }
 
   /**
-   * Applies a local change to a document and triggers synchronization.
+   * Applies a local change to a document, saves it, and triggers synchronization.
    * @param docId The ID of the document to change.
    * @param changeFn The function that applies the change.
    */
   async updateDocument(docId: string, changeFn: (doc: T) => void): Promise<void> {
-    let doc = this.documents.get(docId);
+    const doc = this.documents.get(docId);
     if (!doc) {
       throw new Error(`Document not found: ${docId}`);
     }
@@ -140,32 +114,11 @@ export class SyncManager<T> {
     const newDoc = Automerge.change(doc, changeFn);
     this.documents.set(docId, newDoc);
     this.notifySubscribers(docId);
-    await this.localAdapter.put(docId, Automerge.save(newDoc));
+    const binary = Automerge.save(newDoc);
+    await this.localAdapter.put(docId, binary);
 
-    this.synchronize(docId);
-  }
-
-  /**
-   * Synchronizes a specific document with the remote peer.
-   * @param docId The ID of the document to synchronize.
-   */
-  private async synchronize(docId: string): Promise<void> {
-    if (!this.isOnline) {
-      return;
-    }
-
-    const doc = this.documents.get(docId);
-    const syncState = this.syncStates.get(docId);
-
-    if (!doc || !syncState) {
-      return;
-    }
-
-    const [newSyncState, message] = Automerge.generateSyncMessage(doc, syncState);
-    this.syncStates.set(docId, newSyncState);
-
-    if (message) {
-      await this.remoteAdapter.send({ docId, message });
+    if (this.isOnline) {
+      await this.remoteAdapter.send({ id: docId, binary });
     }
   }
 
@@ -173,8 +126,9 @@ export class SyncManager<T> {
    * Synchronizes all documents with the remote peer.
    */
   private synchronizeAll(): void {
-    for (const docId of this.documents.keys()) {
-      this.synchronize(docId);
+    for (const [docId, doc] of this.documents.entries()) {
+      const binary = Automerge.save(doc);
+      this.remoteAdapter.send({ id: docId, binary });
     }
   }
 

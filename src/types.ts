@@ -1,19 +1,11 @@
 
 /**
- * Represents a document stored locally.
+ * Represents a document stored locally or remotely.
  * The document is stored as a binary representation of an Automerge document.
  */
 export interface LocalDocument {
   id: string;
   binary: Uint8Array;
-}
-
-/**
- * Represents a sync message exchanged between peers.
- */
-export interface SyncMessage {
-  docId: string;
-  message: Uint8Array;
 }
 
 /**
@@ -31,22 +23,22 @@ export interface LocalAdapter {
 
 /**
  * Represents the interface for a remote storage adapter (e.g., a WebSocket server, Firestore).
- * It is responsible for sending and receiving sync messages.
+ * It is responsible for sending and receiving full document binaries.
  */
 export interface RemoteAdapter {
   /**
-   * Subscribes to incoming sync messages from the remote peer.
-   * The callback will be invoked for each message received.
-   * @param callback A function to handle incoming sync messages.
+   * Subscribes to incoming document changes from the remote peer.
+   * The callback will be invoked for each document received.
+   * @param callback A function to handle incoming documents.
    * @returns An unsubscribe function.
    */
-  watch(callback: (message: SyncMessage) => void): () => void;
+  watch(callback: (doc: LocalDocument) => void): () => void;
 
   /**
-   * Sends a sync message to the remote peer.
-   * @param message The sync message to send.
+   * Sends a full document binary to the remote peer.
+   * @param doc The document to send.
    */
-  send(message: SyncMessage): Promise<void>;
+  send(doc: LocalDocument): Promise<void>;
 
   /**
    * Fetches the initial state of all documents from the remote peer.
