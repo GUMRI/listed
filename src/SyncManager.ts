@@ -1,5 +1,5 @@
 
-import Automerge from '@automerge/automerge';
+import * as Automerge from '@automerge/automerge';
 import { LocalAdapter, RemoteAdapter, SyncMessage, LocalDocument } from './types';
 
 /**
@@ -114,8 +114,8 @@ export class SyncManager<T> {
       throw new Error(`Document already exists: ${docId}`);
     }
 
-    const newDoc = Automerge.from(initialDoc as any);
-    this.documents.set(docId, newDoc as any);
+    const newDoc = Automerge.from(initialDoc);
+    this.documents.set(docId, newDoc);
     this.syncStates.set(docId, Automerge.initSyncState());
     this.notifySubscribers(docId);
     await this.localAdapter.put(docId, Automerge.save(newDoc));

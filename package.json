@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "SyncManager for listedb library",
   "main": "dist/SyncManager.js",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "cd examples/vanilla-vite && vite"
