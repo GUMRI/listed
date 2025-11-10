@@ -7,7 +7,7 @@ import {
   getDocs,
   Firestore,
 } from 'firebase/firestore';
-import { RemoteAdapter, SyncMessage, LocalDocument } from './types.js';
+import { RemoteAdapter, SyncMessage, LocalDocument } from './types';
 
 /**
  * An implementation of the RemoteAdapter interface for Firestore.

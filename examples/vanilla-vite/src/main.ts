@@ -29,7 +29,7 @@ async function main() {
 
   // Subscribe to document changes
   syncManager.subscribe(docId, (doc) => {
-    editor.value = doc.text;
+  editor.value = doc.text || '';
     state.textContent = JSON.stringify(doc, null, 2);
   });
 

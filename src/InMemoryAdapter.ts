@@ -1,5 +1,5 @@
 
-import { LocalAdapter, LocalDocument } from './types.js';
+import { LocalAdapter, LocalDocument } from './types';
 
 /**
  * An in-memory implementation of the LocalAdapter interface for testing and demonstration.
