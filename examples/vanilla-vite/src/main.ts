@@ -1,7 +1,5 @@
 
-import './style.css';
-import Automerge from '@automerge/automerge';
-import { SyncManager, FirestoreAdapter, InMemoryAdapter } from 'listedb-sync-manager';
+import './style.css';import { SyncManager, FirestoreAdapter, InMemoryAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
@@ -44,6 +42,8 @@ syncManager.bootstrap().then(() => {
 // Handle editor input
 editor.addEventListener('input', () => {
   syncManager.updateDocument(docId, (doc) => {
+    console.log(editor.value);
+    
     doc.text = editor.value;
   });
 });

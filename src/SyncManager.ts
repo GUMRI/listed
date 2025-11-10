@@ -114,8 +114,8 @@ export class SyncManager<T> {
       throw new Error(`Document already exists: ${docId}`);
     }
 
-    const newDoc = Automerge.from(initialDoc);
-    this.documents.set(docId, newDoc);
+    const newDoc = Automerge.from(initialDoc as any);
+    this.documents.set(docId, newDoc as any);
     this.syncStates.set(docId, Automerge.initSyncState());
     this.notifySubscribers(docId);
     await this.localAdapter.put(docId, Automerge.save(newDoc));
