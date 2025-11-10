@@ -1,7 +1,6 @@
 
 import './style.css';
-import * as Automerge from '@automerge/automerge/slim';
-import wasmUrl from '@automerge/automerge/automerge.wasm?url';
+import * as Automerge from '@automerge/automerge';
 import { SyncManager, FirestoreAdapter, InMemoryAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
 import { initializeApp } from 'firebase/app';
@@ -17,8 +16,6 @@ const state = document.getElementById('state') as HTMLPreElement;
 const docId = 'collaborative-text-doc';
 
 async function main() {
-  await Automerge.initializeWasm(wasmUrl);
-
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const firestore = getFirestore(app);

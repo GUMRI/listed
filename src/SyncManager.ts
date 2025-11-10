@@ -1,5 +1,5 @@
 
-import * as Automerge from '@automerge/automerge/slim';
+import * as Automerge from '@automerge/automerge';
 import { LocalAdapter, RemoteAdapter, SyncMessage, LocalDocument } from './types';
 
 /**
