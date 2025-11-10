@@ -2,12 +2,12 @@
 import {
   collection,
   onSnapshot,
-  doc,
+  doc as fireDoc,
   setDoc,
   getDocs,
   Firestore,
 } from 'firebase/firestore';
-import { RemoteAdapter, LocalDocument } from './types';
+import { RemoteAdapter, LocalDocument } from './types.js';
 
 /**
  * An implementation of the RemoteAdapter interface for Firestore.
@@ -40,7 +40,7 @@ export class FirestoreAdapter implements RemoteAdapter {
 
   async send(doc: LocalDocument): Promise<void> {
     const { id, binary } = doc;
-    const docRef = doc(this.firestore, this.collectionName, id);
+    const docRef = fireDoc(this.firestore, this.collectionName, id);
     await setDoc(docRef, { binary: Array.from(binary) });
   }
 

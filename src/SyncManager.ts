@@ -1,7 +1,6 @@
 
 import * as Automerge from '@automerge/automerge';
-import { LocalAdapter, RemoteAdapter, LocalDocument } from './types';
-
+import { LocalAdapter, RemoteAdapter, LocalDocument } from './types.js';
 /**
  * Manages the synchronization of Automerge documents between a local and remote adapter.
  */
@@ -39,6 +38,7 @@ export class SyncManager<T> {
       for (const doc of remoteDocs) {
         const localDoc = this.documents.get(doc.id);
         if (localDoc) {
+          // Document exists locally, merge remote changes
           const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(doc.binary));
           this.documents.set(doc.id, mergedDoc);
           this.localAdapter.put(doc.id, Automerge.save(mergedDoc));
@@ -68,6 +68,9 @@ export class SyncManager<T> {
     const { id, binary } = remoteDoc;
     const localDoc = this.documents.get(id);
 
+
+//console.log(uint8ArrayToJson(binary));
+
     if (localDoc) {
       const mergedDoc = Automerge.merge(localDoc, Automerge.load<T>(binary));
       this.documents.set(id, mergedDoc);
@@ -89,7 +92,7 @@ export class SyncManager<T> {
       throw new Error(`Document already exists: ${docId}`);
     }
 
-    const newDoc = Automerge.from(initialDoc);
+    const newDoc = Automerge.from(initialDoc as any);
     this.documents.set(docId, newDoc);
     this.notifySubscribers(docId);
     const binary = Automerge.save(newDoc);
