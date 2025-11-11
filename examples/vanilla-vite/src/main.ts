@@ -1,7 +1,6 @@
 
 import './style.css';
-import * as Automerge from '@automerge/automerge';
-import { Repo } from '@automerge/automerge-repo';
+import { AnyDocumentId, Repo } from '@automerge/automerge-repo';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { FirestoreNetworkAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
@@ -15,7 +14,7 @@ interface TextDoc {
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
 const state = document.getElementById('state') as HTMLPreElement;
 
-const docId = 'collaborative-text-doc';
+const docId = 'collaborative-text-doc' as AnyDocumentId;
 
 async function main() {
   // Initialize Firebase
@@ -28,10 +27,11 @@ async function main() {
   });
 
   const handle = repo.find<TextDoc>(docId);
+
   await handle.whenReady();
 
   if (handle.docSync() === undefined) {
-    handle.change((d) => (d.text = ''));
+    handle.change((d: any) => (d.text = ''));
   }
 
   editor.disabled = false;
@@ -44,7 +44,7 @@ async function main() {
   });
 
   editor.addEventListener('input', () => {
-    handle.change((d) => {
+    handle.change((d: any) => {
       d.text = editor.value;
     });
   });

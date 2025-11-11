@@ -1,1 +1,1 @@
-export * from './FirestoreNetworkAdapter';
+export * from './FirestoreNetworkAdapter.js';
