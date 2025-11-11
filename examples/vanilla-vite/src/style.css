@@ -1,0 +1,28 @@
+#app {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.editor-container {
+  margin-bottom: 2rem;
+}
+
+#editor {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.state-container {
+  background-color: #f0f0f0;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

@@ -1,0 +1,24 @@
+{
+  "name": "listedb-sync-manager",
+  "version": "1.0.0",
+  "description": "SyncManager for listedb library",
+  "main": "dist/SyncManager.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "cd examples/vanilla-vite && vite"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.9",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0",
+    "vite-plugin-top-level-await": "^1.4.1",
+    "vite-plugin-wasm": "^3.3.0"
+  },
+  "dependencies": {
+    "@automerge/automerge": "^2.1.11",
+    "firebase": "^10.12.2",
+    "@automerge/automerge-repo": "^1.1.5",
+    "@automerge/automerge-repo-storage-indexeddb": "^1.1.5"
+  }
+}
