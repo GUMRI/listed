@@ -1,13 +1,12 @@
 
 import './style.css';
 import * as Automerge from '@automerge/automerge';
-import { Repo } from '@automerge/automerge-repo';
+import { Repo, DocHandle } from '@automerge/automerge-repo';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { FirestoreNetworkAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { v4 as uuid } from 'uuid';
 
 interface TextDoc {
   text: string;
@@ -15,17 +14,6 @@ interface TextDoc {
 
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
 const state = document.getElementById('state') as HTMLPreElement;
-
-function getDocumentId(): string {
-  let docId = localStorage.getItem('docId');
-  if (!docId) {
-    docId = `automerge:${uuid()}`;
-    localStorage.setItem('docId', docId);
-  }
-  return docId;
-}
-
-const docId = getDocumentId();
 
 async function main() {
   // Initialize Firebase
@@ -37,12 +25,18 @@ async function main() {
     network: [new FirestoreNetworkAdapter(firestore)],
   });
 
-  const handle = repo.find<TextDoc>(docId);
-  await handle.whenReady();
+  let handle: DocHandle<TextDoc>;
+  const docId = localStorage.getItem('docId');
 
-  if (handle.docSync() === undefined) {
+  if (docId) {
+    handle = repo.find<TextDoc>(docId);
+  } else {
+    handle = repo.create<TextDoc>();
     handle.change((d) => (d.text = ''));
+    localStorage.setItem('docId', handle.url);
   }
+
+  await handle.whenReady();
 
   editor.disabled = false;
   editor.value = handle.docSync()?.text || '';
