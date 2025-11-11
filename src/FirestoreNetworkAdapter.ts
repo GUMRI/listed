@@ -1,30 +1,28 @@
 
 import {
-  NetworkAdapter,
+  NetworkAdapterInterface,
   PeerId,
   RepoMessage,
   InboundMessage,
-  Message,
 } from '@automerge/automerge-repo';
 import {
   collection,
   onSnapshot,
   doc,
   setDoc,
-  getDocs,
   Firestore,
   serverTimestamp,
   query,
   where,
-  limit,
-  orderBy,
   Timestamp,
 } from 'firebase/firestore';
+import { EventEmitter } from 'eventemitter3';
 
-export class FirestoreNetworkAdapter extends NetworkAdapter {
+export class FirestoreNetworkAdapter extends EventEmitter<any> implements NetworkAdapterInterface {
   private firestore: Firestore;
   private collectionName: string;
   private peerId?: PeerId;
+  private unsubscribe?: () => void;
 
   constructor(firestore: Firestore, collectionName: string = 'messages') {
     super();
@@ -41,7 +39,7 @@ export class FirestoreNetworkAdapter extends NetworkAdapter {
       where('timestamp', '>=', new Date())
     );
 
-    onSnapshot(q, (snapshot) => {
+    this.unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const data = change.doc.data();
@@ -69,6 +67,8 @@ export class FirestoreNetworkAdapter extends NetworkAdapter {
   }
 
   disconnect() {
-    // No-op
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
   }
 }

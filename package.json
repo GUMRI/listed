@@ -17,8 +17,9 @@
   },
   "dependencies": {
     "@automerge/automerge": "^2.1.11",
-    "firebase": "^10.12.2",
     "@automerge/automerge-repo": "^1.1.5",
-    "@automerge/automerge-repo-storage-indexeddb": "^1.1.5"
+    "@automerge/automerge-repo-storage-indexeddb": "^1.1.5",
+    "eventemitter3": "^5.0.1",
+    "firebase": "^10.12.2"
   }
 }
