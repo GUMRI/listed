@@ -1,6 +1,9 @@
 
 import './style.css';
-import { SyncManager, FirestoreAdapter, InMemoryAdapter } from 'listedb-sync-manager';
+import * as Automerge from '@automerge/automerge';
+import { Repo } from '@automerge/automerge-repo';
+import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
+import { FirestoreNetworkAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
@@ -19,38 +22,31 @@ async function main() {
   const app = initializeApp(firebaseConfig);
   const firestore = getFirestore(app);
 
-  // Initialize adapters
-  const localAdapter = new InMemoryAdapter();
-  const remoteAdapter = new FirestoreAdapter(firestore, 'documents');
-
-  // Initialize SyncManager
-  const syncManager = new SyncManager<TextDoc>(localAdapter, remoteAdapter);
-
-  // Subscribe to document changes
-  syncManager.subscribe(docId, (doc) => {
-  editor.value = doc.text || '';
-    state.textContent = JSON.stringify(doc, null, 2);
+  const repo = new Repo({
+    storage: new IndexedDBStorageAdapter(),
+    network: [new FirestoreNetworkAdapter(firestore)],
   });
 
-  // Bootstrap the SyncManager
-  editor.value = 'Initializing...';
-  await syncManager.bootstrap();
+  const handle = repo.find<TextDoc>(docId);
+  await handle.whenReady();
 
-  let doc = syncManager.getDocument(docId);
-  if (!doc) {
-    // Create the document if it doesn't exist
-    await syncManager.createDocument(docId, { text: '' });
+  if (handle.docSync() === undefined) {
+    handle.change((d) => (d.text = ''));
   }
 
   editor.disabled = false;
-  editor.focus();
+  editor.value = handle.docSync()?.text || '';
+  state.textContent = JSON.stringify(handle.docSync(), null, 2);
 
-  // Handle editor input
+  handle.on('change', ({ doc }) => {
+    editor.value = doc.text;
+    state.textContent = JSON.stringify(doc, null, 2);
+  });
+
   editor.addEventListener('input', () => {
-    
-    syncManager.updateDocument(docId, (doc) => {
-     doc.text = editor.value;
-   });
+    handle.change((d) => {
+      d.text = editor.value;
+    });
   });
 }
 
