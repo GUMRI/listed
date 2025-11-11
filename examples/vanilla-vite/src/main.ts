@@ -7,6 +7,7 @@ import { FirestoreNetworkAdapter } from 'listedb-sync-manager';
 import { firebaseConfig } from './firebase-config';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { v4 as uuid } from 'uuid';
 
 interface TextDoc {
   text: string;
@@ -15,7 +16,16 @@ interface TextDoc {
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
 const state = document.getElementById('state') as HTMLPreElement;
 
-const docId = 'collaborative-text-doc';
+function getDocumentId(): string {
+  let docId = localStorage.getItem('docId');
+  if (!docId) {
+    docId = `automerge:${uuid()}`;
+    localStorage.setItem('docId', docId);
+  }
+  return docId;
+}
+
+const docId = getDocumentId();
 
 async function main() {
   // Initialize Firebase
