@@ -3,7 +3,9 @@ import {
   NetworkAdapterInterface,
   PeerId,
   RepoMessage,
-  InboundMessage,
+  Message,
+  NetworkAdapterEvents,
+  PeerMetadata,
 } from '@automerge/automerge-repo';
 import {
   collection,
@@ -15,13 +17,16 @@ import {
   query,
   where,
   Timestamp,
+  getDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 import { EventEmitter } from 'eventemitter3';
 
-export class FirestoreNetworkAdapter extends EventEmitter<any> implements NetworkAdapterInterface {
+export class FirestoreNetworkAdapter extends EventEmitter<NetworkAdapterEvents> implements NetworkAdapterInterface {
   private firestore: Firestore;
   private collectionName: string;
-  private peerId?: PeerId;
+  peerId?: PeerId;
+  private ready = false;
   private unsubscribe?: () => void;
 
   constructor(firestore: Firestore, collectionName: string = 'messages') {
@@ -30,13 +35,23 @@ export class FirestoreNetworkAdapter extends EventEmitter<any> implements Networ
     this.collectionName = collectionName;
   }
 
-  connect(peerId: PeerId) {
+  async connect(peerId: PeerId, peerMetadata?: PeerMetadata) {
     this.peerId = peerId;
-    this.emit('peer-candidate', { peerId });
+    this.emit('peer-candidate', { peerId, peerMetadata: peerMetadata || {} });
+
+    // Get a reliable server timestamp
+    const tempDoc = doc(collection(this.firestore, 'heartbeats'));
+    await setDoc(tempDoc, { timestamp: serverTimestamp() });
+    const snapshot = await getDoc(tempDoc);
+    const serverTime = (snapshot.data()?.timestamp as Timestamp) || new Timestamp(new Date().getTime() / 1000, 0);
+    await deleteDoc(tempDoc);
+
+    this.ready = true;
+    this.emit('ready', { network: this });
 
     const q = query(
       collection(this.firestore, this.collectionName),
-      where('timestamp', '>=', new Date())
+      where('timestamp', '>=', serverTime)
     );
 
     this.unsubscribe = onSnapshot(q, (snapshot) => {
@@ -44,24 +59,17 @@ export class FirestoreNetworkAdapter extends EventEmitter<any> implements Networ
         if (change.type === 'added') {
           const data = change.doc.data();
           if (data.senderId !== this.peerId) {
-            this.emit('message', {
-              ...data,
-              targetId: this.peerId,
-            } as InboundMessage);
+            this.emit('message', data as Message);
           }
         }
       });
     });
   }
 
-  async send(message: RepoMessage) {
-    const { type, senderId, targetId, ...rest } = message;
+  send(message: Message) {
     const docRef = doc(collection(this.firestore, this.collectionName));
-    await setDoc(docRef, {
-      ...rest,
-      type,
-      senderId,
-      targetId,
+    setDoc(docRef, {
+      ...message,
       timestamp: serverTimestamp(),
     });
   }
@@ -70,5 +78,19 @@ export class FirestoreNetworkAdapter extends EventEmitter<any> implements Networ
     if (this.unsubscribe) {
       this.unsubscribe();
     }
+  }
+
+  isReady() {
+    return this.ready;
+  }
+
+  whenReady() {
+    return new Promise<void>((resolve) => {
+      if (this.ready) {
+        resolve();
+      } else {
+        this.once('ready', () => resolve());
+      }
+    });
   }
 }
