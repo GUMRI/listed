@@ -47,7 +47,7 @@ lSitting.remote(new LFirestore(remoteDB));
 
 // Optional file drive (remote-first sync for files)
 const drive: FStorage = getStorage() 
-lSitting.drive(new LFireStorage(drive));
+lSitting.blobDriver(new LFireStorage(drive),new L_OPFS());
 ```
 
 ## Define fields and schema
