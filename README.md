@@ -46,8 +46,11 @@ const remoteDB: Firestore = getFirestore();
 lSitting.remote(new LFirestore(remoteDB));
 
 // Optional file drive (remote-first sync for files)
-const drive: FStorage = getStorage() 
-lSitting.blobDriver(new LFireStorage(drive),new L_OPFS());
+const fStorage: FStorage = getStorage() 
+lSitting.blobDriver({
+ remote:new LFireStorage(fStorage),
+ local: new L_OPFS()}
+);
 ```
 
 ## Define fields and schema
